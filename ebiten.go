@@ -35,7 +35,12 @@ var blackCircle []byte
 //go:embed resources/unitBackground.png
 var unitBackground []byte
 
-var mapBaseDir string
+//go:embed resources/PL.png
+var plIcon []byte
+
+//go:embed resources/SL.png
+var slIcon []byte
+
 var mapSizeGlobal int
 
 type SubImager interface {
@@ -104,16 +109,16 @@ func (g *Game) Update() error {
 					pos := posData[0].([]interface{})
 					y := pos[1].(float64)
 					x := pos[0].(float64)
-					fmt.Println("Panning to", x, y)
-					g.Map.PanMap([]int{g.Map.OcapMapData.WindowTopLeftX + int(x) - g.Map.WindowWidth/2,
-						(g.Map.SizeY - int(y)) + g.Map.OcapMapData.WindowTopLeftY - g.Map.WindowHeight/2})
+
+					g.Map.OcapMapData.WindowTopLeftX = int(x) - g.Map.WindowWidth/2
+					g.Map.OcapMapData.WindowTopLeftY = (g.Map.SizeY - int(y)) - g.Map.WindowHeight/2
 				}
 			}
 			g.TypeMode = false
 		}
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
-		if time.Since(g.LastMapCommand) > 200*time.Millisecond {
+		if time.Since(g.LastMapCommand) > 500*time.Millisecond {
 			g.TypeMode = !g.TypeMode
 			g.SearchText = ""
 		}
@@ -218,6 +223,22 @@ func (g *Game) Draw(screen *ebiten.Image) {
 						text.Draw(screen, entity.Name, g.Font, point.X-g.Map.OcapMapData.WindowTopLeftX,
 							(point.Y - g.Map.OcapMapData.WindowTopLeftY - 2), color.Black)
 					}
+
+					if strings.Contains(entity.Role, "Platoon Leader") {
+						op := &ebiten.DrawImageOptions{}
+						op.GeoM.Translate(float64(point.X-g.Map.OcapMapData.WindowTopLeftX-15), float64(point.Y-g.Map.OcapMapData.WindowTopLeftY-20))
+						screen.DrawImage(g.Map.Resources["plIcon"], op)
+						text.Draw(screen, entity.Group, g.Font, point.X-g.Map.OcapMapData.WindowTopLeftX-7,
+							(point.Y - g.Map.OcapMapData.WindowTopLeftY - 20), color.Black)
+					}
+					if strings.Contains(entity.Role, "Squad Leader") {
+						op := &ebiten.DrawImageOptions{}
+						op.GeoM.Translate(float64(point.X-g.Map.OcapMapData.WindowTopLeftX-15), float64(point.Y-g.Map.OcapMapData.WindowTopLeftY-20))
+						screen.DrawImage(g.Map.Resources["slIcon"], op)
+						text.Draw(screen, entity.Group, g.Font, point.X-g.Map.OcapMapData.WindowTopLeftX-7,
+							(point.Y - g.Map.OcapMapData.WindowTopLeftY - 20), color.Black)
+					}
+
 					for _, shot := range entity.FramesFired {
 						if int(shot[0].(float64)) == g.Map.OcapMapData.CurrentFrame {
 							shotPos := shot[1].([]interface{})
@@ -239,7 +260,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 					drawCircle(g.Map.Resources["whiteCircle"], 3, 3, 3, color.RGBA{255, 0, 255, 255})
 					screen.DrawImage(g.Map.Resources["whiteCircle"], op)
 				}
-				onScreenUnits = append(onScreenUnits, entity.Side+" - "+entity.Name)
+				onScreenUnits = append(onScreenUnits, entity.Side+"|"+entity.Name+" - "+entity.Role)
 			} else if entity.Type == "vehicle" {
 				op.Filter = ebiten.FilterNearest
 				text.Draw(screen, entity.Name, g.Font, point.X-g.Map.OcapMapData.WindowTopLeftX, point.Y-g.Map.OcapMapData.WindowTopLeftY, color.Black)
@@ -250,14 +271,29 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		if g.Controls.UnitTotal {
 			if len(onScreenUnits) > 0 {
 				op = &ebiten.DrawImageOptions{}
+				op.GeoM.Translate(float64(g.Map.WindowWidth-150), 0)
+				screen.DrawImage(g.Map.Resources["unitBackground"], op)
+				op = &ebiten.DrawImageOptions{}
 				op.GeoM.Translate(float64(g.Map.WindowWidth-100), 0)
 				screen.DrawImage(g.Map.Resources["unitBackground"], op)
 			}
 			for i, unit := range onScreenUnits {
+				unitToGroup := strings.Split(unit, "|")
+				op = &ebiten.DrawImageOptions{}
+				op.GeoM.Translate(float64(g.Map.WindowWidth-150), float64(10+i*10))
+				screen.DrawImage(g.Map.Resources["unitBackground"], op)
 				op = &ebiten.DrawImageOptions{}
 				op.GeoM.Translate(float64(g.Map.WindowWidth-100), float64(10+i*10))
 				screen.DrawImage(g.Map.Resources["unitBackground"], op)
-				text.Draw(screen, unit, g.Font, g.Map.WindowWidth-100, 10+i*10, color.White)
+				if unitToGroup[0] == "EAST" {
+					text.Draw(screen, unitToGroup[1], g.Font, g.Map.WindowWidth-150, 10+i*10, color.RGBA{R: 255, G: 50, B: 0, A: 255})
+				} else if unitToGroup[0] == "WEST" {
+					text.Draw(screen, unitToGroup[1], g.Font, g.Map.WindowWidth-150, 10+i*10, color.RGBA{0, 100, 255, 255})
+				} else if unitToGroup[0] == "CIV" {
+					text.Draw(screen, unitToGroup[1], g.Font, g.Map.WindowWidth-150, 10+i*10, color.RGBA{255, 0, 255, 255})
+				} else {
+					text.Draw(screen, unitToGroup[1], g.Font, g.Map.WindowWidth-150, 10+i*10, color.Black)
+				}
 			}
 		}
 		if g.Controls.Recording {
@@ -282,8 +318,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 
 		if !g.Controls.Recording {
-			text.Draw(screen, fmt.Sprint("N : Toggle Names -- L: Toggle Fire Lines -- U: Unit's in View  -- R: Toggle Recording -- ESC: Unit Search"), g.LargeFont, 10, g.Map.WindowHeight-30, color.Black)
-			text.Draw(screen, fmt.Sprint("WASD: Pan Map -- Left and Right Arrow Keys: Rewind/Fast Forward -- PgDwn/PgUp: Change Pan Speed"), g.LargeFont, 10, g.Map.WindowHeight-10, color.Black)
+			text.Draw(screen, fmt.Sprint("N : Toggle Names -- L: Toggle Fire Lines -- U: Unit's in View  -- R: Toggle Recording -- ESC: Unit Search"), g.Font, 10, g.Map.WindowHeight-30, color.Black)
+			text.Draw(screen, fmt.Sprint("WASD: Pan Map -- Left and Right Arrow Keys: Rewind/Fast Forward -- PgDwn/PgUp: Change Pan Speed"), g.Font, 10, g.Map.WindowHeight-10, color.Black)
 		}
 		ebitenutil.DebugPrint(screen, fmt.Sprint(g.Map.OcapMapData.CurrentFrame, "\n", g.Map.OcapMapData.WindowTopLeftX, g.Map.OcapMapData.WindowTopLeftY))
 	}
@@ -342,11 +378,20 @@ func NewMap(windowWidth, windowHeight int, data OcapData) *Map {
 		return nil
 	}
 
+	slImg, err := png.Decode(bytes.NewReader(slIcon))
+	if err != nil {
+		return nil
+	}
+
+	plImg, err := png.Decode(bytes.NewReader(plIcon))
+
 	ebitenRedCircle := ebiten.NewImageFromImage(redCircleImg)
 	ebitenBlueCircle := ebiten.NewImageFromImage(blueCircleImg)
 	ebitenWhiteCircle := ebiten.NewImageFromImage(whiteCircleImg)
 	ebitenBlackCircle := ebiten.NewImageFromImage(blackCircleImg)
 	ebitenUnitBackground := ebiten.NewImageFromImage(unitBackgroundImg)
+	ebitenSlIcon := ebiten.NewImageFromImage(slImg)
+	ebitenPlIcon := ebiten.NewImageFromImage(plImg)
 
 	return &Map{
 		Resources: map[string]*ebiten.Image{
@@ -355,6 +400,8 @@ func NewMap(windowWidth, windowHeight int, data OcapData) *Map {
 			"whiteCircle":    ebitenWhiteCircle,
 			"blackCircle":    ebitenBlackCircle,
 			"unitBackground": ebitenUnitBackground,
+			"slIcon":         ebitenSlIcon,
+			"plIcon":         ebitenPlIcon,
 		},
 		LastFrame:     time.Now(),
 		WindowWidth:   windowWidth,

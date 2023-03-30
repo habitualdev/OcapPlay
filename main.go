@@ -207,6 +207,8 @@ func main() {
 	rootContainer.AddChild(mapToggleButton)
 
 	ebiten.SetWindowSize(1024, 1024)
+	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
+	ebiten.SetCursorShape(ebiten.CursorShapeCrosshair)
 	ebiten.SetWindowTitle("OCAP Play")
 	go newGame.Record()
 
@@ -216,28 +218,31 @@ func main() {
 }
 
 func drawCircle(img draw.Image, x0, y0, r int, c color.Color) {
-	x, y, dx, dy := r-1, 0, 1, 1
-	err := dx - (r * 2)
+	for n := 0; n < 3; n++ {
 
-	for x > y {
-		img.Set(x0+x, y0+y, c)
-		img.Set(x0+y, y0+x, c)
-		img.Set(x0-y, y0+x, c)
-		img.Set(x0-x, y0+y, c)
-		img.Set(x0-x, y0-y, c)
-		img.Set(x0-y, y0-x, c)
-		img.Set(x0+y, y0-x, c)
-		img.Set(x0+x, y0-y, c)
+		x, y, dx, dy := r-1, 0, 1, 1
+		err := dx - (r * 2)
 
-		if err <= 0 {
-			y++
-			err += dy
-			dy += 2
-		}
-		if err > 0 {
-			x--
-			dx += 2
-			err += dx - (r * 2)
+		for x > y {
+			img.Set(x0+x, y0+y, c)
+			img.Set(x0+y, y0+x, c)
+			img.Set(x0-y, y0+x, c)
+			img.Set(x0-x, y0+y, c)
+			img.Set(x0-x, y0-y, c)
+			img.Set(x0-y, y0-x, c)
+			img.Set(x0+y, y0-x, c)
+			img.Set(x0+x, y0-y, c)
+
+			if err <= 0 {
+				y++
+				err += dy
+				dy += 2
+			}
+			if err > 0 {
+				x--
+				dx += 2
+				err += dx - (r * 2)
+			}
 		}
 	}
 }
